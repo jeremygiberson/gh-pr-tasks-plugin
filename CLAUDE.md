@@ -13,4 +13,4 @@ A Claude Code plugin that provides skills for using GitHub pull request reviews 
 ## Dependencies
 
 - GitHub CLI (`gh`) must be installed and authenticated
-- Requires the `gh-pr-comments` extension for viewing inline comments on PR reviews (`gh pr-comments`)
+- Requires the `gh-pr-review` extension for managing inline PR review comments (`gh pr-review`)

@@ -1,0 +1,10 @@
+{
+  "name": "gh-pr-tasks",
+  "version": "0.1.0",
+  "description": "Skills for working with GitHub PR reviews — list PRs, give reviews, and address review feedback.",
+  "author": {
+    "name": "Jeremy Giberson"
+  },
+  "license": "MIT",
+  "keywords": ["github", "pull-request", "review", "workflow"]
+}
