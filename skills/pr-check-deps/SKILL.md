@@ -41,27 +41,49 @@ gh extension list | grep "pr-review"
 ```
 
 If no output, the extension is not installed. Read `docs/security-review-log.md` to find the current approved install command (it's in the "Current Approved Install Command" section near the top of the file). Report:
-> The `gh-pr-review` extension is not installed. Install it with the pinned version:
+> The `gh-pr-review` extension is not installed. Install it with the reviewed version:
 > ```
 > [insert command from security-review-log.md]
 > ```
 
-### Check 4: Pinned version matches
+### Check 4: Installed version matches approved release
 
-Read `docs/security-review-log.md` and extract the pinned commit hash from the install command. Then check the installed version:
+Read `docs/security-review-log.md` and extract the **Approved Release** tag (e.g., `v1.6.2`). Check `gh extension list` output to see if the installed version matches.
 
 ```bash
 gh extension list | grep "pr-review"
 ```
 
-The output includes the installed version/commit. If it does not match the pinned hash, warn:
-> The installed `gh-pr-review` version does not match the reviewed pin. Currently pinned: `[hash]`. To update:
+If the installed version does not match the approved release tag, warn:
+> The installed `gh-pr-review` version does not match the approved release. Approved: `[tag]`. To update:
 > ```
 > gh extension remove pr-review
 > [insert install command from security-review-log.md]
 > ```
 
-If the version check is inconclusive (gh extension list may not show the full hash), note the discrepancy but do not block the workflow.
+### Check 5: Release tag integrity
+
+Read `docs/security-review-log.md` and extract the **Release Commit Hash** (the commit SHA the release tag pointed to at review time). Then verify the tag still points to the same commit:
+
+```bash
+TAG_SHA=$(gh api "repos/agynio/gh-pr-review/git/ref/tags/<TAG>" --jq '.object.sha')
+COMMIT_SHA=$(gh api "repos/agynio/gh-pr-review/git/tags/$TAG_SHA" --jq '.object.sha' 2>/dev/null || echo "$TAG_SHA")
+echo "$COMMIT_SHA"
+```
+
+Compare `$COMMIT_SHA` against the Release Commit Hash from `docs/security-review-log.md`.
+
+- If they **match**: the release is intact, proceed normally.
+- If they **differ**: the release tag has been moved since our security review. This is a warning — the installed binary may contain code we haven't reviewed. Report:
+  > **WARNING**: The `gh-pr-review` release tag `[tag]` now points to a different commit than when it was reviewed.
+  > - Reviewed commit: `[hash from log]`
+  > - Current commit: `[current hash]`
+  >
+  > This could mean the release was updated after our security review. A new security review should be performed before continuing. See `docs/security-review-process.md`.
+
+  Do **not** block the workflow for this warning, but make it clearly visible to the user.
+
+- If the API call fails (e.g., no network), note the failure but do not block the workflow.
 
 ### Success
 

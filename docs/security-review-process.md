@@ -1,6 +1,12 @@
 # Security Review Process: agynio/gh-pr-review
 
-Workflow for periodically reviewing the [agynio/gh-pr-review](https://github.com/agynio/gh-pr-review) extension for security concerns before updating our pinned install hash.
+Workflow for periodically reviewing the [agynio/gh-pr-review](https://github.com/agynio/gh-pr-review) extension for security concerns before updating our pinned install version.
+
+## Key Concepts
+
+- **Release tag**: The version tag (e.g., `v1.6.2`) used with `gh extension install --pin`. Tags are mutable — they can be moved to point to different commits.
+- **Release commit hash**: The immutable commit SHA that the release tag pointed to at review time. We record this to detect if a tag is moved after review.
+- **Reviewed commit**: The commit SHA we actually reviewed (may be ahead of the release if we reviewed `main`).
 
 ## When to Review
 
@@ -9,28 +15,42 @@ Workflow for periodically reviewing the [agynio/gh-pr-review](https://github.com
 - Periodically (recommended: monthly or before any significant project milestone)
 - If a security advisory is published for the repo or its dependencies
 
-## Step 1: Check for Updates
+## Step 1: Check for New Releases
 
-Compare our pinned hash against the current `main` HEAD:
+Check the latest release and compare to our approved version:
 
 ```bash
-# Our current pinned hash
-grep "pin" docs/security-review-log.md | head -1
+# Our current approved release
+grep "Approved Release" docs/security-review-log.md
 
-# Current main HEAD
-gh api "repos/agynio/gh-pr-review/commits/main" --jq '.sha'
+# Latest release on GitHub
+gh api "repos/agynio/gh-pr-review/releases/latest" --jq '{tag: .tag_name, created: .created_at}'
 ```
 
-If the hashes match, no review is needed.
+If the latest release matches our approved version, check that the tag hasn't been moved:
+
+```bash
+# Get the commit hash the tag currently points to
+TAG_SHA=$(gh api "repos/agynio/gh-pr-review/git/ref/tags/<TAG>" --jq '.object.sha')
+# Dereference annotated tag to get actual commit
+COMMIT_SHA=$(gh api "repos/agynio/gh-pr-review/git/tags/$TAG_SHA" --jq '.object.sha' 2>/dev/null || echo "$TAG_SHA")
+echo "$COMMIT_SHA"
+```
+
+Compare against the "Release Commit Hash" in `docs/security-review-log.md`. If they match, no review needed. If they differ, **the release tag was moved** — treat this as a new release requiring review.
 
 ## Step 2: Review the Diff Since Last Reviewed Commit
 
-Get the diff between our last reviewed commit and current `main`:
+Get the diff between our last reviewed commit and the new release:
 
 ```bash
-# Replace OLD_HASH with the hash from security-review-log.md
-gh api "repos/agynio/gh-pr-review/compare/OLD_HASH...main" --jq '.commits | length'
-gh api "repos/agynio/gh-pr-review/compare/OLD_HASH...main" --jq '.files[] | "\(.status) \(.filename)"'
+# Get the new release's commit hash (dereference annotated tags)
+TAG_SHA=$(gh api "repos/agynio/gh-pr-review/git/ref/tags/<NEW_TAG>" --jq '.object.sha')
+NEW_COMMIT=$(gh api "repos/agynio/gh-pr-review/git/tags/$TAG_SHA" --jq '.object.sha' 2>/dev/null || echo "$TAG_SHA")
+
+# Replace OLD_HASH with the "Reviewed Commit" from security-review-log.md
+gh api "repos/agynio/gh-pr-review/compare/OLD_HASH...$NEW_COMMIT" --jq '.commits | length'
+gh api "repos/agynio/gh-pr-review/compare/OLD_HASH...$NEW_COMMIT" --jq '.files[] | "\(.status) \(.filename)"'
 ```
 
 If only documentation, tests, or CI config changed, the review can be expedited.
@@ -88,28 +108,31 @@ These facts about the codebase speed up subsequent reviews:
 
 Create `docs/security-reviews/YYYY-MM-DD-review.md` following the format of existing reviews. Include:
 
-- Reviewed commit hash
+- Release tag and commit hash
+- Reviewed commit hash (if reviewing `main` beyond the release)
 - Summary of changes since last review
 - Security findings (or confirmation that no concerns were found)
-- Updated install command with new hash (if approved)
+- Updated install command with new release tag (if approved)
 
 ## Step 6: Update the Review Log
 
 Append a new row to the table in `docs/security-review-log.md`:
 
 ```markdown
-| `NEW_COMMIT_HASH` | YYYY-MM-DD | PASS/FAIL — summary | [YYYY-MM-DD-review.md](security-reviews/YYYY-MM-DD-review.md) |
+| `<TAG>` | `<RELEASE_COMMIT_HASH>` | `<REVIEWED_COMMIT>` | YYYY-MM-DD | PASS/FAIL — summary | [YYYY-MM-DD-review.md](security-reviews/YYYY-MM-DD-review.md) |
 ```
 
-If the review passes, also update the "Current Approved Install Command" section at the top of the log with the new hash.
+If the review passes, also update the "Current Approved Install Command" section at the top of the log:
+- Update the `--pin` value to the new release tag
+- Update the "Approved Release", "Release Commit Hash", and "Reviewed Source Commit" fields
 
 ## Step 7: Communicate to Team
 
-After updating the pinned hash, notify the team to re-install:
+After updating the pinned version, notify the team to re-install:
 
 ```bash
-gh extension remove gh-pr-review
-gh extension install agynio/gh-pr-review --pin NEW_COMMIT_HASH
+gh extension remove pr-review
+gh extension install agynio/gh-pr-review --pin <NEW_TAG>
 ```
 
 ## Expedited Review (Diff-Only)
