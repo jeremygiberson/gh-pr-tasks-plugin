@@ -1,0 +1,13 @@
+{
+  "name": "gh-pr-tasks-plugin",
+  "owner": {
+    "name": "Jeremy Giberson"
+  },
+  "plugins": [
+    {
+      "name": "gh-pr-tasks-plugin",
+      "source": "./",
+      "description": "Adds skills and plugins for managing GitHub pull request tasks, including fixing PR feedback and addressing review comments."
+    }
+  ]
+}
