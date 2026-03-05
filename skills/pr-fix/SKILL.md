@@ -55,6 +55,7 @@ git worktree add .worktrees/<headRefName> origin/<headRefName>
 ```
 
 Auto-detect and install dependencies in the worktree:
+- If `.env` exists: `cd .worktrees/<branch> && ln -s ../../.env .env`
 - If `package.json` exists: `cd .worktrees/<branch> && npm install`
 - If `go.mod` exists: `cd .worktrees/<branch> && go mod download`
 - If `requirements.txt` exists: `cd .worktrees/<branch> && pip install -r requirements.txt`
