@@ -44,6 +44,24 @@ Report: "Fixing feedback on PR #N: <title>"
 
 **Step 2: Setup worktree**
 
+First, check if the current working directory is already on the PR branch:
+
+```bash
+# Check current branch name
+git rev-parse --abbrev-ref HEAD
+```
+
+**If the current branch matches `<headRefName>`:** Skip worktree creation. Instead, fetch and pull to ensure the local branch is up to date with the remote:
+
+```bash
+git fetch origin <headRefName>
+git pull origin <headRefName>
+```
+
+Use the current working directory as the working directory for all subsequent steps (instead of `.worktrees/<branch>/`). Do NOT create a worktree, and skip the cleanup step (Step 15) at the end.
+
+**Otherwise:** Create a new worktree:
+
 ```bash
 # Ensure worktree directory exists and is gitignored
 mkdir -p .worktrees
@@ -195,6 +213,8 @@ gh pr-review threads resolve --thread-id <PRRT_...> -R <owner/repo> <PR_NUMBER>
 
 **Step 15: Clean up**
 
+Skip this step if no worktree was created (i.e., the user was already on the PR branch).
+
 ```bash
 cd <original_directory>
 git worktree remove .worktrees/<headRefName>
@@ -209,5 +229,5 @@ Report: "PR #N updated and pushed. Replied to N skipped threads, resolved N addr
 - **Plan before implementing.** Do not start coding until the plan is approved.
 - **Tests before pushing.** Tests must pass before pushing (user can override if informed).
 - **Push before commenting.** Push code first, then post comments and resolve threads — ensures the code backing the "resolved" threads is actually in the PR.
-- **Worktree isolation.** All work happens in the worktree. Never modify the user's main working directory.
-- **Clean up.** Always remove the worktree when done, even if the workflow is cancelled.
+- **Worktree isolation.** All work happens in the worktree, unless the user is already on the PR branch — in that case, work in the current directory. Never modify a different branch's working directory.
+- **Clean up.** Always remove the worktree when done, even if the workflow is cancelled. Skip cleanup if no worktree was created.
