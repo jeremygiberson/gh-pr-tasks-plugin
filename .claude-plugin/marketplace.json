@@ -5,7 +5,7 @@
   },
   "plugins": [
     {
-      "name": "gh-pr-tasks-plugin",
+      "name": "gh-pr-tasks",
       "source": "./",
       "description": "Adds skills and plugins for managing GitHub pull request tasks, including fixing PR feedback and addressing review comments."
     }
