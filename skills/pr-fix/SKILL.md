@@ -1,6 +1,6 @@
 ---
 name: pr-fix
-description: Addresses review feedback on your GitHub pull request — checks out the PR branch to a worktree, triages each feedback item with you, creates an implementation plan, executes fixes, and pushes. Use when the user wants to fix PR feedback, address review comments, or work on PR changes requested by reviewers.
+description: Addresses review feedback on your GitHub pull request — triages each feedback item with you, creates an implementation plan, executes fixes, and pushes. Use when the user wants to fix PR feedback, address review comments, or work on PR changes requested by reviewers.
 allowed-tools: Bash, Read, Glob, Grep, Edit, Write, Agent, AskUserQuestion, EnterPlanMode, TaskCreate, TaskUpdate, TaskList
 ---
 
@@ -22,6 +22,12 @@ Addresses review feedback on the user's own PR. Triages each feedback item with 
 
 First, invoke the `pr-check-deps` skill to validate the environment. If it reports a failure, stop and show the remediation instructions.
 
+## Workspace Assumptions
+
+This skill assumes the user has already set up their workspace (e.g., checked out the PR branch, created a worktree, etc.). All work happens in the current working directory. The user is responsible for workspace setup and cleanup.
+
+If the current branch does not match the PR's `headRefName`, warn the user and ask if they'd like to continue anyway.
+
 ## Workflow
 
 ### Phase 1: Setup
@@ -42,46 +48,31 @@ gh pr view <PR_NUMBER> -R <owner/repo> --json number,title,headRefName,baseRefNa
 
 Report: "Fixing feedback on PR #N: <title>"
 
-**Step 2: Setup worktree**
+**Step 2: Verify branch**
 
-First, check if the current working directory is already on the PR branch:
+Check that the current branch matches the PR branch:
 
 ```bash
-# Check current branch name
 git rev-parse --abbrev-ref HEAD
 ```
 
-**If the current branch matches `<headRefName>`:** Skip worktree creation. Instead, fetch and pull to ensure the local branch is up to date with the remote:
+**If the current branch matches `<headRefName>`:** Fetch and pull to ensure the local branch is up to date with the remote:
 
 ```bash
 git fetch origin <headRefName>
 git pull origin <headRefName>
 ```
 
-Use the current working directory as the working directory for all subsequent steps (instead of `.worktrees/<branch>/`). Do NOT create a worktree, and skip the cleanup step (Step 15) at the end.
+**If the current branch does NOT match `<headRefName>`:** Warn the user:
+> "Current branch `<current_branch>` does not match the PR branch `<headRefName>`. You may want to use the `rename-branch` skill to align your branch name, or check out the correct branch."
 
-**Otherwise:** Create a new worktree:
+Use `AskUserQuestion` to ask: "Continue working in the current directory anyway, or stop so you can set up your workspace?"
 
-```bash
-# Ensure worktree directory exists and is gitignored
-mkdir -p .worktrees
-git check-ignore -q .worktrees 2>/dev/null || echo ".worktrees/" >> .gitignore
-
-# Fetch and create worktree
-git fetch origin <headRefName>
-git worktree add .worktrees/<headRefName> origin/<headRefName>
-```
-
-Auto-detect and install dependencies in the worktree:
-- If `.env` exists: `cd .worktrees/<branch> && ln -s ../../.env .env`
-- If `package.json` exists: `cd .worktrees/<branch> && npm install`
-- If `go.mod` exists: `cd .worktrees/<branch> && go mod download`
-- If `requirements.txt` exists: `cd .worktrees/<branch> && pip install -r requirements.txt`
-- If `Cargo.toml` exists: `cd .worktrees/<branch> && cargo build`
+If the user chooses to stop, end the workflow.
 
 **Step 3: Run baseline tests**
 
-Detect and run the project's test suite in the worktree. If tests fail, inform the user:
+Detect and run the project's test suite. If tests fail, inform the user:
 > Baseline tests are failing before any changes. Proceed anyway?
 
 ### Phase 2: Triage
@@ -101,7 +92,7 @@ Parse the JSON response. Group feedback items by reviewer, then by file. Each fe
 
 **Step 5: Triage each feedback item**
 
-For EACH feedback item, present it to the user with the relevant code context. Read the file at the specified line in the worktree to show surrounding code.
+For EACH feedback item, present it to the user with the relevant code context. Read the file at the specified line to show surrounding code.
 
 Use `AskUserQuestion` for each item with these options:
 
@@ -158,11 +149,11 @@ Iterate until the user approves.
 
 **Step 10: Execute the plan**
 
-Working in the worktree (`.worktrees/<branch>/`), implement all planned changes. Use the Edit tool to modify files. Commit logical groups of changes as you go.
+Implement all planned changes in the current working directory. Use the Edit tool to modify files. Commit logical groups of changes as you go.
 
 **Step 11: Run tests**
 
-Run the full test suite in the worktree. Report results to the user.
+Run the full test suite. Report results to the user.
 
 If tests fail:
 - Analyze failures and attempt to fix
@@ -177,7 +168,7 @@ Show the user:
 3. The full diff:
 
 ```bash
-cd .worktrees/<branch> && git diff origin/<headRefName>
+git diff origin/<headRefName>
 ```
 
 ### Phase 5: Finalize
@@ -193,8 +184,7 @@ The user must explicitly approve before proceeding.
 On approval:
 
 ```bash
-# Push from the worktree
-cd .worktrees/<branch> && git push origin <headRefName>
+git push origin <headRefName>
 ```
 
 Post skip-reason replies (see [CLI reference](./gh-pr-review-reference.md)):
@@ -211,15 +201,6 @@ Resolve addressed threads:
 gh pr-review threads resolve --thread-id <PRRT_...> -R <owner/repo> <PR_NUMBER>
 ```
 
-**Step 15: Clean up**
-
-Skip this step if no worktree was created (i.e., the user was already on the PR branch).
-
-```bash
-cd <original_directory>
-git worktree remove .worktrees/<headRefName>
-```
-
 Report: "PR #N updated and pushed. Replied to N skipped threads, resolved N addressed threads. <link>"
 
 ## Constraints
@@ -229,5 +210,4 @@ Report: "PR #N updated and pushed. Replied to N skipped threads, resolved N addr
 - **Plan before implementing.** Do not start coding until the plan is approved.
 - **Tests before pushing.** Tests must pass before pushing (user can override if informed).
 - **Push before commenting.** Push code first, then post comments and resolve threads — ensures the code backing the "resolved" threads is actually in the PR.
-- **Worktree isolation.** All work happens in the worktree, unless the user is already on the PR branch — in that case, work in the current directory. Never modify a different branch's working directory.
-- **Clean up.** Always remove the worktree when done, even if the workflow is cancelled. Skip cleanup if no worktree was created.
+- **Work in current directory.** All work happens in the current working directory. Never modify files outside of it.

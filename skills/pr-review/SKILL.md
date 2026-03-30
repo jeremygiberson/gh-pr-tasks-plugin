@@ -1,12 +1,12 @@
 ---
 name: pr-review
-description: Performs a full code review on a GitHub pull request — checks out the PR to a worktree, analyzes the diff, drafts inline review comments, presents for user approval, and submits. Use when the user asks to review a PR, give feedback on a PR, or examine a PR for issues.
-allowed-tools: Bash, Read, Glob, Grep, Edit, Write, Agent, AskUserQuestion
+description: Performs a full code review on a GitHub pull request — analyzes the diff, drafts inline review comments, presents for user approval, and submits. Use when the user asks to review a PR, give feedback on a PR, or examine a PR for issues.
+allowed-tools: Bash, Read, Glob, Grep, AskUserQuestion
 ---
 
 # PR Review
 
-Full review-giving workflow for a GitHub pull request. Checks out the PR, reads the code, drafts inline review comments, and submits after user approval.
+Full review-giving workflow for a GitHub pull request. Reads the code, drafts inline review comments, and submits after user approval.
 
 ## When to Activate
 
@@ -21,6 +21,12 @@ Full review-giving workflow for a GitHub pull request. Checks out the PR, reads 
 ## Prerequisites
 
 First, invoke the `pr-check-deps` skill to validate the environment. If it reports a failure, stop and show the remediation instructions.
+
+## Workspace Assumptions
+
+This skill assumes the user has already set up their workspace (e.g., checked out the PR branch, created a worktree, etc.). All work happens in the current working directory. The user is responsible for workspace setup and cleanup.
+
+If the current branch does not match the PR's `headRefName`, warn the user and ask if they'd like to continue anyway.
 
 ## Workflow
 
@@ -42,23 +48,27 @@ gh pr view <PR_NUMBER> -R <owner/repo> --json number,title,headRefName,baseRefNa
 
 Report to the user: "Reviewing PR #N: <title> by @author (<additions>+/<deletions>-, <changedFiles> files)"
 
-**Step 2: Setup worktree**
+**Step 2: Verify branch**
+
+Check that the current branch matches the PR branch:
 
 ```bash
-# Ensure worktree directory exists and is gitignored
-mkdir -p .worktrees
-git check-ignore -q .worktrees 2>/dev/null || echo ".worktrees/" >> .gitignore
-
-# Fetch and create worktree
-git fetch origin <headRefName>
-git worktree add .worktrees/<headRefName> origin/<headRefName>
+git rev-parse --abbrev-ref HEAD
 ```
 
-Auto-detect and install dependencies in the worktree:
-- If `package.json` exists: `cd .worktrees/<branch> && npm install`
-- If `go.mod` exists: `cd .worktrees/<branch> && go mod download`
-- If `requirements.txt` exists: `cd .worktrees/<branch> && pip install -r requirements.txt`
-- If `Cargo.toml` exists: `cd .worktrees/<branch> && cargo build`
+**If the current branch matches `<headRefName>`:** Fetch to ensure we have the latest:
+
+```bash
+git fetch origin <headRefName>
+git pull origin <headRefName>
+```
+
+**If the current branch does NOT match `<headRefName>`:** Warn the user:
+> "Current branch `<current_branch>` does not match the PR branch `<headRefName>`. You may want to use the `rename-branch` skill to align your branch name, or check out the correct branch."
+
+Use `AskUserQuestion` to ask: "Continue working in the current directory anyway, or stop so you can set up your workspace?"
+
+If the user chooses to stop, end the workflow.
 
 ### Phase 2: Analyze
 
@@ -70,7 +80,7 @@ gh pr diff <PR_NUMBER> -R <owner/repo>
 
 **Step 4: Read changed files for context**
 
-For each file in the diff, read the full file in the worktree to understand the surrounding context. Use the Read tool on files in `.worktrees/<branch>/`.
+For each file in the diff, read the full file to understand the surrounding context.
 
 Focus on understanding:
 - What the code does and why
@@ -142,18 +152,10 @@ gh pr-review review --submit \
   -R <owner/repo> <PR_NUMBER>
 ```
 
-**Step 9: Clean up**
-
-```bash
-cd <original_directory>
-git worktree remove .worktrees/<headRefName>
-```
-
 Report: "Review submitted on PR #N: <link>"
 
 ## Constraints
 
 - **Never auto-submit.** Always present the complete review for user approval before submitting.
-- **Worktree isolation.** Always work in the worktree, never modify the user's working directory.
-- **Clean up.** Always remove the worktree when done, even if the review is cancelled.
+- **Work in current directory.** All work happens in the current working directory. Never modify files outside of it.
 - **Constructive feedback.** Review comments should be specific, actionable, and explain the reasoning.
