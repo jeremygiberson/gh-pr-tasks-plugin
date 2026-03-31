@@ -1,12 +1,12 @@
 ---
 name: pr-review
-description: Performs a full code review on a GitHub pull request — checks out the PR to a worktree, analyzes the diff, drafts inline review comments, presents for user approval, and submits. Use when the user asks to review a PR, give feedback on a PR, or examine a PR for issues.
-allowed-tools: Bash, Read, Glob, Grep, Edit, Write, Agent, AskUserQuestion
+description: Performs a full code review on a GitHub pull request — analyzes the diff, drafts inline review comments, presents for user approval, and submits. Use when the user asks to review a PR, give feedback on a PR, or examine a PR for issues.
+allowed-tools: Bash, Read, Glob, Grep, AskUserQuestion
 ---
 
 # PR Review
 
-Full review-giving workflow for a GitHub pull request. Checks out the PR, reads the code, drafts inline review comments, and submits after user approval.
+Full review-giving workflow for a GitHub pull request. Reads the code, drafts inline review comments, and submits after user approval.
 
 ## When to Activate
 
@@ -42,23 +42,32 @@ gh pr view <PR_NUMBER> -R <owner/repo> --json number,title,headRefName,baseRefNa
 
 Report to the user: "Reviewing PR #N: <title> by @author (<additions>+/<deletions>-, <changedFiles> files)"
 
-**Step 2: Setup worktree**
+**Step 2: Verify branch**
+
+Check the current branch and compare it to the PR branch:
 
 ```bash
-# Ensure worktree directory exists and is gitignored
-mkdir -p .worktrees
-git check-ignore -q .worktrees 2>/dev/null || echo ".worktrees/" >> .gitignore
-
-# Fetch and create worktree
+git rev-parse --abbrev-ref HEAD
 git fetch origin <headRefName>
-git worktree add .worktrees/<headRefName> origin/<headRefName>
 ```
 
-Auto-detect and install dependencies in the worktree:
-- If `package.json` exists: `cd .worktrees/<branch> && npm install`
-- If `go.mod` exists: `cd .worktrees/<branch> && go mod download`
-- If `requirements.txt` exists: `cd .worktrees/<branch> && pip install -r requirements.txt`
-- If `Cargo.toml` exists: `cd .worktrees/<branch> && cargo build`
+Compare the local HEAD against the remote PR branch:
+
+```bash
+git rev-list --left-right --count HEAD...origin/<headRefName>
+```
+
+There are three possible states:
+
+**A) Current branch matches `<headRefName>` and is up to date:** Proceed to the next step.
+
+**B) Current branch matches `<headRefName>` but is behind the remote:** Inform the user their branch is behind and use `AskUserQuestion` with options:
+- **Pull** — Run `git pull origin <headRefName>` to update the local branch.
+- **Ignore** — Continue with the local state as-is.
+
+**C) Current branch does NOT match `<headRefName>`:** Inform the user and use `AskUserQuestion` with options:
+- **Checkout the PR branch** — Run `git checkout <headRefName>` (or `git checkout -b <headRefName> origin/<headRefName>` if the branch doesn't exist locally). Then pull to ensure it's up to date.
+- **Ignore** — Continue working on the current branch as-is. The user is responsible for ensuring the correct code is checked out.
 
 ### Phase 2: Analyze
 
@@ -70,7 +79,7 @@ gh pr diff <PR_NUMBER> -R <owner/repo>
 
 **Step 4: Read changed files for context**
 
-For each file in the diff, read the full file in the worktree to understand the surrounding context. Use the Read tool on files in `.worktrees/<branch>/`.
+For each file in the diff, read the full file to understand the surrounding context.
 
 Focus on understanding:
 - What the code does and why
@@ -142,18 +151,10 @@ gh pr-review review --submit \
   -R <owner/repo> <PR_NUMBER>
 ```
 
-**Step 9: Clean up**
-
-```bash
-cd <original_directory>
-git worktree remove .worktrees/<headRefName>
-```
-
 Report: "Review submitted on PR #N: <link>"
 
 ## Constraints
 
 - **Never auto-submit.** Always present the complete review for user approval before submitting.
-- **Worktree isolation.** Always work in the worktree, never modify the user's working directory.
-- **Clean up.** Always remove the worktree when done, even if the review is cancelled.
+- **Work in current directory.** All work happens in the current working directory. Never modify files outside of it.
 - **Constructive feedback.** Review comments should be specific, actionable, and explain the reasoning.

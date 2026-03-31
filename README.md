@@ -8,7 +8,7 @@ A Claude Code plugin that provides skills for working with GitHub pull request r
 - The `gh-pr-review` extension, installed at a pinned commit:
 
 ```bash
-gh extension install agynio/gh-pr-review --pin 9c422aaa07cfc296cdc8e349ec490d9236b7bfdf
+gh extension install agynio/gh-pr-review --pin v1.6.2
 ```
 
 The pinned hash is tracked in `docs/security-review-log.md`. Do not update it without a security review.
@@ -41,21 +41,22 @@ Lists pull requests needing your attention. Shows two sections:
 
 ### pr-review
 
-Full code review workflow for a pull request. Checks out the PR to a worktree, analyzes the diff and changed files, drafts inline review comments with a summary, presents everything for your approval, and submits.
+Full code review workflow for a pull request. Analyzes the diff and changed files, drafts inline review comments with a summary, presents everything for your approval, and submits. Assumes you've already set up your workspace (e.g., checked out the PR branch or created a worktree).
 
 - Never auto-submits; always waits for your approval
 - Supports APPROVE, COMMENT, and REQUEST_CHANGES events
-- Cleans up the worktree when done
+- Warns if current branch doesn't match the PR branch
 
 **Triggers:** "review PR #123", "give a review on this PR", "check this PR for issues"
 
 ### pr-fix
 
-Addresses review feedback on your own PR. Checks out the branch to a worktree, walks through each feedback item with you (skip or address), creates an implementation plan, executes the fixes, runs tests, and pushes after your approval. Skipped items get a reply comment; addressed items are resolved.
+Addresses review feedback on your own PR. Walks through each feedback item with you (skip or address), creates an implementation plan, executes the fixes, runs tests, and pushes after your approval. Skipped items get a reply comment; addressed items are resolved. Assumes you've already set up your workspace.
 
 - User approval required at every phase (triage, plan, push)
 - Runs tests before pushing
 - Posts reply comments for skipped feedback and resolves addressed threads
+- Warns if current branch doesn't match the PR branch
 
 **Triggers:** "fix PR feedback", "address PR #123 feedback", "work on PR review comments"
 
@@ -69,6 +70,7 @@ skills/
   pr-list/             # PR listing skill
   pr-review/           # Code review skill
   pr-fix/              # Fix feedback skill
+
 docs/
   security-review-log.md   # Pinned extension hash and review history
   security-reviews/        # Detailed security review reports
