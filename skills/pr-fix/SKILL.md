@@ -22,12 +22,6 @@ Addresses review feedback on the user's own PR. Triages each feedback item with 
 
 First, invoke the `pr-check-deps` skill to validate the environment. If it reports a failure, stop and show the remediation instructions.
 
-## Workspace Assumptions
-
-This skill assumes the user has already set up their workspace (e.g., checked out the PR branch, created a worktree, etc.). All work happens in the current working directory. The user is responsible for workspace setup and cleanup.
-
-If the current branch does not match the PR's `headRefName`, warn the user and ask if they'd like to continue anyway.
-
 ## Workflow
 
 ### Phase 1: Setup
@@ -50,25 +44,30 @@ Report: "Fixing feedback on PR #N: <title>"
 
 **Step 2: Verify branch**
 
-Check that the current branch matches the PR branch:
+Check the current branch and compare it to the PR branch:
 
 ```bash
 git rev-parse --abbrev-ref HEAD
+git fetch origin <headRefName>
 ```
 
-**If the current branch matches `<headRefName>`:** Fetch and pull to ensure the local branch is up to date with the remote:
+Compare the local HEAD against the remote PR branch:
 
 ```bash
-git fetch origin <headRefName>
-git pull origin <headRefName>
+git rev-list --left-right --count HEAD...origin/<headRefName>
 ```
 
-**If the current branch does NOT match `<headRefName>`:** Warn the user:
-> "Current branch `<current_branch>` does not match the PR branch `<headRefName>`. You may want to use the `rename-branch` skill to align your branch name, or check out the correct branch."
+There are three possible states:
 
-Use `AskUserQuestion` to ask: "Continue working in the current directory anyway, or stop so you can set up your workspace?"
+**A) Current branch matches `<headRefName>` and is up to date:** Proceed to the next step.
 
-If the user chooses to stop, end the workflow.
+**B) Current branch matches `<headRefName>` but is behind the remote:** Inform the user their branch is behind and use `AskUserQuestion` with options:
+- **Pull** — Run `git pull origin <headRefName>` to update the local branch.
+- **Ignore** — Continue with the local state as-is.
+
+**C) Current branch does NOT match `<headRefName>`:** Inform the user and use `AskUserQuestion` with options:
+- **Checkout the PR branch** — Run `git checkout <headRefName>` (or `git checkout -b <headRefName> origin/<headRefName>` if the branch doesn't exist locally). Then pull to ensure it's up to date.
+- **Ignore** — Continue working on the current branch as-is. The user is responsible for ensuring the correct code is checked out.
 
 **Step 3: Run baseline tests**
 

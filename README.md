@@ -60,15 +60,6 @@ Addresses review feedback on your own PR. Walks through each feedback item with 
 
 **Triggers:** "fix PR feedback", "address PR #123 feedback", "work on PR review comments"
 
-### rename-branch
-
-Renames the current git branch to match the expected branch name for a PR. Useful when working in a worktree created by an orchestrator that assigns random branch names.
-
-- Resolves target branch name from a PR number or direct user input
-- Sets upstream tracking if the remote branch exists
-
-**Triggers:** "rename branch", "fix my branch name", "align branch to PR #123"
-
 ## Project Structure
 
 ```
@@ -79,7 +70,7 @@ skills/
   pr-list/             # PR listing skill
   pr-review/           # Code review skill
   pr-fix/              # Fix feedback skill
-  rename-branch/       # Branch rename utility skill
+
 docs/
   security-review-log.md   # Pinned extension hash and review history
   security-reviews/        # Detailed security review reports
